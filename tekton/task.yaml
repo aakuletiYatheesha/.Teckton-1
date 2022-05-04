@@ -1,0 +1,57 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: activity_tracker-task
+spec:
+  params:
+    - name: repository
+      description: the git repository
+    - name: revision
+      description: the revision
+      default: main
+    - name: apikey
+      description: the ibmcloud api key
+    - name: api
+      description: the ibmcloud api endpoint
+      default: "https://cloud.ibm.com"      
+    - name: continuous-delivery-context-secret
+      description: name of the configmap containing the continuous delivery pipeline context secrets
+      default: cd-secret
+  workspaces:
+    - name: task-pvc
+      mountPath: /artifacts  
+  steps:
+    - name: clone-repo
+      image: alpine/git
+      env:
+        - name: REVISION
+          value: $(params.revision)
+        - name: Apikey
+          valueFrom:
+            secretKeyRef:
+              name: $(params.continuous-delivery-context-secret)
+              key: Apikey
+      command: ["/bin/sh", "-c"]
+      args:
+        - set -e -o pipefail;
+          url="https://github.com/MonikaReddy29/Tekton.git" ;
+          cd /workspace && git clone -q  $url .;
+
+    - name: logscmd
+      image: icr.io/continuous-delivery/pipeline/pipeline-base-image:latest
+      env:
+        - name: IBMCLOUD_API_KEY
+          value: $(params.apikey)      
+      command: ["/bin/bash", "-c"]
+      args:
+        - set -e -o pipefail;
+          ibmcloud login -a $(params.api) -r --apikey $IBMCLOUD_API_KEY;
+          cd /workspace;      
+          echo "staring install";
+          apt-get -y update;
+          apt-get -y install python3;
+          apt-get -y install python3-pip;
+          pip3 install logging
+          ibmcloud logging service-instances --output wide --all-regions
+          ibmcloud logging service-instances --output wide --all-regions --sn logdnaat
+          ibmcloud resource service-instance
